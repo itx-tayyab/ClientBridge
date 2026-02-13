@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,17 +21,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Calendar, DollarSign } from "lucide-react";
-
-// 🔮 MOCK CLIENT LIST (In real app, this comes from your database)
-const availableClients = [
-  { id: "1", name: "Sarah Wilson", email: "sarah@company.com" },
-  { id: "2", name: "Tech Startup Inc", email: "contact@techstart.com" },
-  { id: "3", name: "Coffee House", email: "manager@coffee.com" },
-];
+import { Plus, Calendar, DollarSign, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function CreateProjectModal() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Data State
+  const [clients, setClients] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     clientId: "",
@@ -40,20 +39,73 @@ export function CreateProjectModal() {
     description: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 1. Fetch Clients when Modal Opens
+  useEffect(() => {
+    if (open) {
+      const fetchClients = async () => {
+        const token = localStorage.getItem("token");
+        try {
+          // Note: Ensure this URL matches your backend setup (e.g. /api/projects/clients)
+          const res = await fetch("http://localhost:8000/projects/getclients", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          // Ensure we are setting an array
+          setClients(data.clients || (Array.isArray(data) ? data : []));
+        } catch (error) {
+          console.error("Failed to fetch clients", error);
+        }
+      };
+      fetchClients();
+    }
+  }, [open]);
+
+  // 2. Handle Submit
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 🔮 API CALL GOES HERE
-    console.log("Creating Project:", formData);
+    setIsLoading(true);
     
-    // Reset and close
-    setOpen(false);
-    setFormData({
-      name: "",
-      clientId: "",
-      deadline: "",
-      budget: "",
-      description: "",
-    });
+    const token = localStorage.getItem("token");
+
+    try {
+      // 👇 KEY FIX: Create a new payload object and convert clientId to Number
+      const payload = {
+        ...formData,
+        clientId: Number(formData.clientId) // Convert "4" (string) to 4 (number)
+      };
+
+      const response = await fetch("http://localhost:8000/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload) // Send the fixed payload
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Show the specific error message from the backend
+        throw new Error(data.message || "Failed to create project");
+      }
+
+      // Success
+      alert("Project created successfully!");
+      setOpen(false);
+      
+      // Clear form
+      setFormData({ name: "", clientId: "", deadline: "", budget: "", description: "" });
+      
+      // Refresh page to show new project
+      window.location.reload(); 
+
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Error creating project");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -68,13 +120,12 @@ export function CreateProjectModal() {
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
-            Start a new project with one of your existing clients.
+            Start a new project with one of your connected clients.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           
-          {/* 1. Project Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Project Name</Label>
             <Input
@@ -87,7 +138,7 @@ export function CreateProjectModal() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* 2. Client Selection (CRITICAL) */}
+            {/* Client Dropdown */}
             <div className="space-y-2">
               <Label htmlFor="client">Assign Client</Label>
               <Select 
@@ -95,19 +146,23 @@ export function CreateProjectModal() {
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a client" />
+                  <SelectValue placeholder={clients.length > 0 ? "Select a client" : "No clients found"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableClients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id.toString()}>
                       {client.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {clients.length === 0 && (
+                  <p className="text-[10px] text-red-500">
+                    * You need to Invite a client and have them register first.
+                  </p>
+              )}
             </div>
 
-            {/* 3. Deadline Date */}
             <div className="space-y-2">
               <Label htmlFor="deadline">Deadline</Label>
               <div className="relative">
@@ -124,14 +179,13 @@ export function CreateProjectModal() {
             </div>
           </div>
 
-          {/* 4. Budget */}
           <div className="space-y-2">
-            <Label htmlFor="budget">Total Budget (Optional)</Label>
+            <Label htmlFor="budget">Total Budget</Label>
             <div className="relative">
               <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="budget"
-                type="number"
+                type="text"
                 placeholder="0.00"
                 className="pl-10"
                 value={formData.budget}
@@ -140,7 +194,6 @@ export function CreateProjectModal() {
             </div>
           </div>
 
-          {/* 5. Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Project Description</Label>
             <Textarea
@@ -157,7 +210,9 @@ export function CreateProjectModal() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create Project</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : "Create Project"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
