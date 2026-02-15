@@ -1,18 +1,54 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FolderKanban, Clock, ArrowRight } from "lucide-react";
-
-// Mock Data for the Client
-const myProjects = [
-  { id: 1, name: "E-commerce Website Redesign", status: "Active", deadline: "Mar 15, 2024" },
-  { id: 2, name: "Mobile App Development", status: "In Progress", deadline: "Apr 02, 2024" },
-  { id: 3, name: "Brand Identity Package", status: "Pending", deadline: "Feb 28, 2024" },
-];
+import { FolderKanban, Clock, ArrowRight, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 export default function ClientDashboard({ user }: { user: any }) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState({
+    stats: {
+      activeProjects: 0,
+      pendingApprovals: 0
+    },
+    recentProjects: [] as any[]
+  });
+
+  // Fetch Real Data from Backend
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        // 👇 Using the Client Endpoint we created
+        const res = await fetch("http://localhost:8000/dashboard/client", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const result = await res.json();
+          setData(result);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* 1. Header Section */}
@@ -23,7 +59,7 @@ export default function ClientDashboard({ user }: { user: any }) {
         </p>
       </div>
 
-      {/* 2. Stats Cards (Only 2 cards as per image) */}
+      {/* 2. Stats Cards (Exact design maintained) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -33,7 +69,7 @@ export default function ClientDashboard({ user }: { user: any }) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">3</div>
+            <div className="text-3xl font-bold">{data.stats.activeProjects}</div>
           </CardContent>
         </Card>
 
@@ -45,7 +81,7 @@ export default function ClientDashboard({ user }: { user: any }) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">2</div>
+            <div className="text-3xl font-bold">{data.stats.pendingApprovals}</div>
           </CardContent>
         </Card>
       </div>
@@ -54,7 +90,9 @@ export default function ClientDashboard({ user }: { user: any }) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
             <h3 className="text-xl font-semibold">Your Projects</h3>
-            <Button variant="link" className="text-primary">View All</Button>
+            <Link href="/projects">
+              <Button variant="link" className="text-primary">View All</Button>
+            </Link>
         </div>
         
         <Card className="overflow-hidden">
@@ -69,26 +107,38 @@ export default function ClientDashboard({ user }: { user: any }) {
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
-                {myProjects.map((project) => (
-                  <tr key={project.id} className="border-b transition-colors hover:bg-muted/50">
-                    <td className="p-4 font-medium">{project.name}</td>
-                    <td className="p-4">
-                        <Badge variant="secondary" className={
-                             project.status === "Active" ? "bg-purple-100 text-purple-700 hover:bg-purple-100" : 
-                             project.status === "In Progress" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : 
-                             "bg-orange-100 text-orange-700 hover:bg-orange-100"
-                        }>
-                            {project.status}
-                        </Badge>
-                    </td>
-                    <td className="p-4 text-muted-foreground">{project.deadline}</td>
-                    <td className="p-4 text-right">
-                        <Button variant="ghost" size="sm">
-                            <ArrowRight className="h-4 w-4" />
-                        </Button>
+                {data.recentProjects.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-muted-foreground">
+                      No projects found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  data.recentProjects.map((project) => (
+                    <tr key={project.id} className="border-b transition-colors hover:bg-muted/50">
+                      <td className="p-4 font-medium">{project.name}</td>
+                      <td className="p-4">
+                          <Badge variant="secondary" className={
+                               project.status === "ACTIVE" ? "bg-purple-100 text-purple-700 hover:bg-purple-100" : 
+                               project.status === "IN_PROGRESS" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : 
+                               "bg-orange-100 text-orange-700 hover:bg-orange-100"
+                          }>
+                              {project.status}
+                          </Badge>
+                      </td>
+                      <td className="p-4 text-muted-foreground">
+                        {new Date(project.deadline || Date.now()).toLocaleDateString()}
+                      </td>
+                      <td className="p-4 text-right">
+                          <Link href={`/projects/${project.id}`}>
+                            <Button variant="ghost" size="sm">
+                                <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
