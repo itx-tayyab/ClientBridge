@@ -1,0 +1,124 @@
+// This is your Database Structure
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. User (Both Freelancers and Clients)
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(FREELANCER)
+  createdAt DateTime @default(now())
+
+  // Relationships
+  freelancerProjects Project[]      @relation("FreelancerProjects")
+  clientProjects     Project[]      @relation("ClientProjects")
+  sentInvites        ClientInvite[] // Invites sent by this freelancer
+  notifications      Notification[] 
+}
+
+// 2. Client Invites (The "Golden Key" System)
+model ClientInvite {
+  id           Int      @id @default(autoincrement())
+  email        String
+  name         String
+  token        String   @unique 
+  status       InviteStatus @default(PENDING)
+  
+  freelancerId Int
+  freelancer   User     @relation(fields: [freelancerId], references: [id])
+  
+  createdAt    DateTime @default(now())
+}
+
+// 3. Projects
+model Project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  status       ProjectStatus @default(ACTIVE)
+  deadline     String? 
+  budget       String?
+  progress     Int     @default(0)
+
+  // Who is this project for?
+  freelancerId Int
+  freelancer   User @relation("FreelancerProjects", fields: [freelancerId], references: [id])
+  
+  clientId     Int
+  client       User @relation("ClientProjects", fields: [clientId], references: [id])
+
+  milestones   Milestone[]
+  files        File[]
+  createdAt    DateTime @default(now())
+}
+
+// 4. Milestones
+model Milestone {
+  id        Int     @id @default(autoincrement())
+  title     String
+  price     String
+  status    MilestoneStatus @default(PENDING)
+  dueDate   DateTime? 
+  
+  projectId Int
+  project   Project @relation(fields: [projectId], references: [id])
+}
+
+// 5. Files
+model File {
+  id        Int      @id @default(autoincrement())
+  name      String
+  url       String
+  size      String
+  uploadedBy String
+  
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id])
+  
+  createdAt DateTime @default(now())
+}
+
+// 6. Notifications
+model Notification {
+  id        Int      @id @default(autoincrement())
+  title     String   
+  message   String   
+  isRead    Boolean  @default(false)
+  
+  userId    Int      // Who receives this?
+  user      User     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+}
+
+// --- ENUMS ---
+
+enum Role {
+  FREELANCER
+  CLIENT
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  PENDING
+}
+
+enum MilestoneStatus {
+  ACTIVE
+  COMPLETED
+  PENDING
+}
