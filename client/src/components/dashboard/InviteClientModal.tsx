@@ -35,7 +35,7 @@ export function InviteClientModal({ trigger }: InviteClientModalProps) {
       const token = localStorage.getItem("token"); // Get auth token
 
       // 👇 API CALL
-      const response = await fetch("http://localhost:5000/api/invites", {
+      const response = await fetch("http://localhost:8000/invites", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
