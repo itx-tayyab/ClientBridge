@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,10 +16,14 @@ import {
 import { Briefcase, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+
 type UserRole = "freelancer" | "client";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const isInviteSignup = Boolean(token);
   
   // Form State
   const [name, setName] = useState("");
@@ -29,7 +33,34 @@ export default function RegisterPage() {
 
   // UI State
   const [isLoading, setIsLoading] = useState(false);
+  const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchInvite = async () => {
+      setIsInviteLoading(true);
+      try {
+        const res = await fetch(`http://localhost:8000/invites/${token}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || "Invalid or expired invite");
+        }
+
+        setEmail(data.invite.email);
+        setName(data.invite.name);
+        setRole("client");
+      } catch (err: any) {
+        setError(err.message || "Failed to validate invite");
+      } finally {
+        setIsInviteLoading(false);
+      }
+    };
+
+    fetchInvite();
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +78,7 @@ export default function RegisterPage() {
           email,
           password,
           role: role.toUpperCase(),
+          token: token || undefined,
         }),
       });
 
@@ -130,7 +162,7 @@ export default function RegisterPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
-                    disabled={isLoading}
+                    disabled={isLoading || isInviteSignup}
                   />
                 </div>
               </div>
@@ -157,7 +189,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    disabled={isLoading}
+                    disabled={isLoading || isInviteSignup}
                     onClick={() => setRole("freelancer")}
                     className={cn(
                       "flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all",
@@ -187,7 +219,7 @@ export default function RegisterPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={isLoading}
+                    disabled={isLoading || isInviteSignup}
                     onClick={() => setRole("client")}
                     className={cn(
                       "flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all",
@@ -218,11 +250,17 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? (
+              {isInviteSignup && (
+                <p className="text-xs text-muted-foreground">
+                  You are registering via invite link. Email and role are locked to invited values.
+                </p>
+              )}
+
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading || isInviteLoading}>
+                {isLoading || isInviteLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Account...
+                    {isInviteLoading ? "Validating Invite..." : "Creating Account..."}
                   </>
                 ) : (
                   <>
@@ -248,3 +286,4 @@ export default function RegisterPage() {
     </div>
   );
 }
+
