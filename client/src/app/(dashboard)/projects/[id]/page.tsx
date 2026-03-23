@@ -6,10 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle, CircleDollarSign, Calendar, User, Clock, Upload, FileText, Send, Loader2 } from "lucide-react";
+import { CheckCircle, CircleDollarSign, Calendar, User, Clock, Upload, FileText, Send, Loader2, MoreVertical, Pencil, Trash2, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AddMilestoneModal } from "@/components/dashboard/AddMilestoneModal";
 import { io } from "socket.io-client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -17,6 +24,11 @@ export default function ProjectDetailsPage() {
   // Handle array or string param safely
   const rawId = params?.id || params?.projectId;
   const projectId = Array.isArray(rawId) ? rawId[0] : rawId;
+
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<any | null>(null);
+
+
 
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -156,6 +168,22 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  // 👇 Delete Milestone Function
+  const handleDeleteMilestone = async (milestoneId: number) => {
+    if (!confirm("Are you sure you want to delete this milestone?")) return;
+    
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/projects/milestones/${milestoneId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) fetchProjectData();
+    } catch (error) {
+      console.error("Error deleting", error);
+    }
+  };
+
   useEffect(() => {
     fetchProjectData();
   }, [projectId]);
@@ -228,6 +256,7 @@ export default function ProjectDetailsPage() {
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* 1️⃣ PROJECT HEADER */}
+      
       <div className="flex flex-col gap-6 border-b pb-8">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -286,20 +315,40 @@ export default function ProjectDetailsPage() {
         {/* === TAB 1: MILESTONES === */}
         <TabsContent value="milestones" className="space-y-4">
           
+          
+
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Project Milestones</h3>
-            {isFreelancer && projectId && (
-              <AddMilestoneModal 
-                projectId={projectId as string} 
-                onSuccess={fetchProjectData} 
-              />
+            {isFreelancer && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingMilestone(null);
+                  setIsMilestoneModalOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Milestone
+              </Button>
             )}
+            
+            {/* 👇 THE UNIFIED MODAL MOUNTED ONCE */}
+          <AddMilestoneModal 
+            isOpen={isMilestoneModalOpen}
+            onClose={() => {
+              setIsMilestoneModalOpen(false);
+              setEditingMilestone(null);
+            }}
+            projectId={projectId as string}
+            milestoneToEdit={editingMilestone}
+            onSuccess={fetchProjectData}
+          />
+            
           </div>
 
           {project.milestones.length === 0 && (
             <div className="p-8 text-center border-2 border-dashed rounded-xl bg-muted/20 text-muted-foreground">
               No milestones created yet. 
-              {isFreelancer && " Click the button to add one."}
             </div>
           )}
 
@@ -307,7 +356,7 @@ export default function ProjectDetailsPage() {
             <Card key={milestone.id} className="transition-all hover:shadow-sm">
               <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 
-                {/* Left: Info */}
+                {/* Left Side: Icon & Details */}
                 <div className="flex items-center gap-4">
                   <div className={`h-12 w-12 rounded-full flex items-center justify-center shrink-0 ${
                     milestone.status === "COMPLETED" ? "bg-green-100 text-green-600" : "bg-primary/10 text-primary"
@@ -328,39 +377,65 @@ export default function ProjectDetailsPage() {
                   </div>
                 </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center gap-4 self-end sm:self-auto">
+                {/* Right Side: Badges, Action Button, & 3 Dots Menu */}
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                  
+                  {/* Status Rendering (FIXED LAYOUT) */}
                   {milestone.status === "COMPLETED" && (
                      <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 px-3 py-1">Completed</Badge>
                   )}
 
                   {milestone.status === "ACTIVE" && (
-                    <div className="flex items-center gap-3">
+                    <>
                       <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100">In Progress</Badge>
                       {isFreelancer ? (
-                         <Button size="sm" onClick={() => handleStatusUpdate(milestone.id, "COMPLETED")}>
-                           Mark Complete
-                         </Button>
+                         <Button size="sm" onClick={() => handleStatusUpdate(milestone.id, "COMPLETED")}>Mark Complete</Button>
                       ) : (
                          <Button size="sm" variant="outline" disabled>Awaiting Work</Button>
                       )}
-                    </div>
+                    </>
                   )}
 
                   {milestone.status === "PENDING" && (
-                    <div className="flex items-center gap-3">
+                    <>
                        <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">Pending</Badge>
                        {isFreelancer ? (
-                         <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(milestone.id, "ACTIVE")}>
-                           Start Work
-                         </Button>
+                         <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(milestone.id, "ACTIVE")}>Start Work</Button>
                        ) : (
                          <Button variant="ghost" size="sm" disabled className="text-muted-foreground">Waiting</Button>
                        )}
-                    </div>
+                    </>
                   )}
-                </div>
 
+                  {/* 👇 3-DOTS MENU (ONLY FOR FREELANCERS) */}
+                  {isFreelancer && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground ml-2">
+                          <MoreVertical className="h-5 w-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        
+                        <DropdownMenuItem onClick={() => {
+                          setEditingMilestone(milestone); // Pass data to modal
+                          setIsMilestoneModalOpen(true);  // Open modal
+                        }}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuItem 
+                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                          onClick={() => handleDeleteMilestone(milestone.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
+                </div>
               </CardContent>
             </Card>
           ))}
