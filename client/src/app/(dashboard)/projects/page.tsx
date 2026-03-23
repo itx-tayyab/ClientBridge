@@ -6,8 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, FolderOpen, Calendar, Search, Filter, Loader2 } from "lucide-react";
+import { Plus, FolderOpen, Calendar, Search, Filter, Loader2, MoreVertical, Pencil, Trash2} from "lucide-react";
 import { CreateProjectModal } from "@/components/dashboard/CreateProjectModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Define shape of data coming from API
 interface Project {
@@ -16,6 +22,9 @@ interface Project {
   status: string;
   deadline: string;
   progress: number;
+  budget?: string;
+  description?: string;
+  clientId?: number;
   client?: { name: string };     // If fetched as Freelancer
   freelancer?: { name: string }; // If fetched as Client
 }
@@ -30,39 +39,42 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [userRole, setUserRole] = useState("FREELANCER");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+
+  const fetchProjects = async () => {
+    const token = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+
+    if (!token || !storedUser) return;
+
+    const user = JSON.parse(storedUser);
+    setUserRole(user.role);
+
+    try {
+      const baseUrl = "http://localhost:8000/projects/getallprojects";
+      const url = user.role === "FREELANCER" && selectedClientId
+        ? `${baseUrl}?clientId=${selectedClientId}`
+        : baseUrl;
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data.projects);
+      }
+    } catch (error) {
+      console.error("Failed to fetch projects", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 1. Fetch Data on Load
   useEffect(() => {
-    const fetchProjects = async () => {
-      const token = localStorage.getItem("token");
-      const storedUser = localStorage.getItem("user");
-      
-      if (!token || !storedUser) return;
-      
-      const user = JSON.parse(storedUser);
-      setUserRole(user.role);
-
-      try {
-        const baseUrl = "http://localhost:8000/projects/getallprojects";
-        const url = user.role === "FREELANCER" && selectedClientId
-          ? `${baseUrl}?clientId=${selectedClientId}`
-          : baseUrl;
-
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setProjects(data.projects);
-        }
-      } catch (error) {
-        console.error("Failed to fetch projects", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
+    setIsLoading(true);
     fetchProjects();
   }, [selectedClientId]);
 
@@ -95,9 +107,19 @@ export default function ProjectsPage() {
 
         {/* Hide Create Button for Clients */}
         {userRole === "FREELANCER" && (
-          <CreateProjectModal />
+          <CreateProjectModal onSuccess={fetchProjects} />
         )}
       </div>
+
+      <CreateProjectModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setProjectToEdit(null);
+        }}
+        projectToEdit={projectToEdit}
+        onSuccess={fetchProjects}
+      />
 
       {/* Search Bar */}
       <div className="flex items-center gap-2">
@@ -130,21 +152,41 @@ export default function ProjectsPage() {
               onClick={() => router.push(`/projects/${project.id}`)}
             >
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div className="space-y-1">
-                  <CardTitle className="text-base font-semibold leading-tight">
-                    {project.name}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {/* Dynamic: Show Client Name if Freelancer, else Freelancer Name */}
-                    {userRole === "FREELANCER" 
-                      ? project.client?.name 
-                      : project.freelancer?.name}
-                  </p>
-                </div>
-                <div className="h-8 w-8 rounded-lg bg-secondary/50 flex items-center justify-center">
-                  <FolderOpen className="h-4 w-4 text-foreground" />
-                </div>
-              </CardHeader>
+  <div className="space-y-1">
+    <CardTitle className="text-base font-semibold leading-tight">{project.name}</CardTitle>
+    <p className="text-sm text-muted-foreground">{project.client?.name || "Unknown Client"}</p>
+  </div>
+  
+  <div className="flex items-center gap-1">
+    <div className="h-8 w-8 rounded-lg bg-secondary/50 flex items-center justify-center">
+      <FolderOpen className="h-4 w-4 text-foreground" />
+    </div>
+
+    {/* 👇 NEW: 3-Dots Menu on the Project Card */}
+    {userRole === "FREELANCER" && (
+      <div onClick={(e) => e.stopPropagation()}> {/* Prevents card click when clicking menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => {
+              setProjectToEdit(project);
+              setIsEditModalOpen(true);
+            }}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-red-600" onClick={() => console.log("Delete Project", project.id)}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )}
+  </div>
+</CardHeader>
               <CardContent>
                 <div className="mt-4 flex items-center justify-between text-sm">
                   <Badge variant={project.status === "ACTIVE" ? "default" : "secondary"} className={
