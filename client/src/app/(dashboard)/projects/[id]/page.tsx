@@ -174,13 +174,18 @@ export default function ProjectDetailsPage() {
     
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:8000/api/projects/milestones/${milestoneId}`, {
+      const res = await fetch(`http://localhost:8000/projects/${projectId}/milestone/${milestoneId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) fetchProjectData();
+      if (res.ok) {
+        fetchProjectData();
+      } else {
+        alert("Failed to delete milestone");
+      }
     } catch (error) {
       console.error("Error deleting", error);
+      alert("Error deleting milestone");
     }
   };
 
