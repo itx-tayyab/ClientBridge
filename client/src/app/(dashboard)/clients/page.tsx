@@ -97,7 +97,7 @@ export default function ClientsPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {client.status === "ACCEPTED" && (
-                    <DropdownMenuItem onClick={() => router.push(`/clients/${client.userId}`)}>
+                    <DropdownMenuItem onClick={() => client.userId && router.push(`/projects?clientId=${client.userId}`)}>
                       <Eye className="mr-2 h-4 w-4" /> View Details
                     </DropdownMenuItem>
                   )}
@@ -106,9 +106,6 @@ export default function ClientsPage() {
                       <RefreshCw className="mr-2 h-4 w-4" /> Resend Invite
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem className="text-red-600">
-                    <Trash className="mr-2 h-4 w-4" /> Remove
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </CardHeader>
