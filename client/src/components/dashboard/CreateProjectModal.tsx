@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,12 +23,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Calendar, DollarSign, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
-export function CreateProjectModal() {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
+interface ProjectForEdit {
+  id: number;
+  name: string;
+  clientId?: number;
+  deadline?: string | null;
+  budget?: string | null;
+  description?: string | null;
+}
+
+interface CreateProjectModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onSuccess?: () => void;
+  projectToEdit?: ProjectForEdit | null;
+  trigger?: ReactNode;
+}
+
+export function CreateProjectModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  projectToEdit,
+  trigger,
+}: CreateProjectModalProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isOpen ?? internalOpen;
   const [isLoading, setIsLoading] = useState(false);
+  const isEditing = !!projectToEdit;
   
   // Data State
   const [clients, setClients] = useState<any[]>([]);
@@ -38,6 +62,17 @@ export function CreateProjectModal() {
     budget: "",
     description: "",
   });
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (isOpen !== undefined) {
+      if (!nextOpen) {
+        onClose?.();
+      }
+      return;
+    }
+
+    setInternalOpen(nextOpen);
+  };
 
   // 1. Fetch Clients when Modal Opens
   useEffect(() => {
@@ -60,6 +95,23 @@ export function CreateProjectModal() {
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    if (projectToEdit) {
+      setFormData({
+        name: projectToEdit.name || "",
+        clientId: projectToEdit.clientId ? String(projectToEdit.clientId) : "",
+        deadline: projectToEdit.deadline ? String(projectToEdit.deadline).split("T")[0] : "",
+        budget: projectToEdit.budget || "",
+        description: projectToEdit.description || "",
+      });
+      return;
+    }
+
+    setFormData({ name: "", clientId: "", deadline: "", budget: "", description: "" });
+  }, [open, projectToEdit]);
+
   // 2. Handle Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +126,14 @@ export function CreateProjectModal() {
         clientId: Number(formData.clientId) // Convert "4" (string) to 4 (number)
       };
 
-      const response = await fetch("http://localhost:8000/projects", {
-        method: "POST",
+      const endpoint = isEditing
+        ? `http://localhost:8000/projects/${projectToEdit.id}`
+        : "http://localhost:8000/projects";
+
+      const method = isEditing ? "PUT" : "POST";
+
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
@@ -91,36 +149,45 @@ export function CreateProjectModal() {
       }
 
       // Success
-      alert("Project created successfully!");
-      setOpen(false);
+      alert(isEditing ? "Project updated successfully!" : "Project created successfully!");
+      handleOpenChange(false);
       
       // Clear form
       setFormData({ name: "", clientId: "", deadline: "", budget: "", description: "" });
-      
-      // Refresh page to show new project
-      window.location.reload(); 
+
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.reload();
+      }
 
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Error creating project");
+      alert(error.message || (isEditing ? "Error updating project" : "Error creating project"));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Project
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {isOpen === undefined && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Create Project
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Create New Project</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Project" : "Create New Project"}</DialogTitle>
           <DialogDescription>
-            Start a new project with one of your connected clients.
+            {isEditing
+              ? "Update the project details."
+              : "Start a new project with one of your connected clients."}
           </DialogDescription>
         </DialogHeader>
 
@@ -142,6 +209,7 @@ export function CreateProjectModal() {
             <div className="space-y-2">
               <Label htmlFor="client">Assign Client</Label>
               <Select 
+                value={formData.clientId}
                 onValueChange={(value) => setFormData({ ...formData, clientId: value })}
                 required
               >
@@ -207,11 +275,17 @@ export function CreateProjectModal() {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : "Create Project"}
+              {isLoading ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : isEditing ? (
+                "Save Changes"
+              ) : (
+                "Create Project"
+              )}
             </Button>
           </DialogFooter>
         </form>
