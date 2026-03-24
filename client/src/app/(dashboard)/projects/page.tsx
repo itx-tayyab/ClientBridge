@@ -42,6 +42,29 @@ export default function ProjectsPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
 
+  const handleDeleteProject = async (projectId: number) => {
+    const shouldDelete = confirm("Are you sure you want to delete this project?");
+    if (!shouldDelete) return;
+
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await fetch(`http://localhost:8000/projects/${projectId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to delete project");
+      }
+
+      await fetchProjects();
+    } catch (error: any) {
+      alert(error.message || "Error deleting project");
+    }
+  };
+
   const fetchProjects = async () => {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
@@ -178,7 +201,10 @@ export default function ProjectsPage() {
             }}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600" onClick={() => console.log("Delete Project", project.id)}>
+            <DropdownMenuItem
+              className="text-red-600"
+              onClick={() => handleDeleteProject(project.id)}
+            >
               <Trash2 className="mr-2 h-4 w-4" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
