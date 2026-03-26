@@ -55,7 +55,30 @@ export const getMessages = async (req,res) => {
   }
 };
 
-// 3. Get Conversations (Direct Messages List)
+export const getConversations = async (req, res) => {
+  try {
+
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: {projectId: Number(projectId)},
+      include: {
+        sender: { select: { id: true, name: true } }
+      }
+    })
+
+    res.status(200).json(messages); 
+    
+  } catch (error) {
+    res.status(500).json({message: "Server Error"});
+  }
+}
+
+
 // Includes both message history AND all project collaborators
 // export const getConversations = async (req, res) => {
 //   try {
