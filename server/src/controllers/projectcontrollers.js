@@ -47,7 +47,6 @@ export const getallclients = async (req, res) => {
     }
 }
 
-
 export const createproject = async (req, res) => {
 
     const { name, description, deadline, budget, clientId } = req.body;
@@ -137,6 +136,93 @@ export const createproject = async (req, res) => {
             message: "Project Creation Failed",
             error: error.message,
         })
+    }
+}
+
+export const updateproject = async (req, res) => {
+
+    const { projectId } = req.params;
+    const { name, description, deadline, budget, clientId } = req.body;
+    const freelancerId = req.user?.id;
+
+    if (!freelancerId) {
+        return res.status(401).json({
+            message: "Unauthorized",
+        });
+    }
+
+    try {
+        const existingProject = await prisma.project.findUnique({
+            where: { id: Number(projectId) },
+            include: {
+                client: { select: { email: true } },
+            },
+        });
+
+        if (!existingProject) {
+            return res.status(404).json({
+                message: "Project not found",
+            });
+        }
+
+        if (existingProject.freelancerId !== Number(freelancerId)) {
+            return res.status(403).json({
+                message: "You are not allowed to update this project",
+            });
+        }
+
+        let nextClientId = existingProject.clientId;
+
+        if (clientId && Number(clientId) !== existingProject.clientId) {
+            const client = await prisma.user.findUnique({
+                where: { id: Number(clientId) }
+            });
+
+            if (!client) {
+                return res.status(404).json({
+                    message: "Client not found",
+                });
+            }
+
+            const inviteForThisClient = await prisma.clientInvite.findFirst({
+                where: {
+                    freelancerId: Number(freelancerId),
+                    email: client.email,
+                    status: "ACCEPTED",
+                }
+            });
+
+            if (!inviteForThisClient) {
+                return res.status(403).json({
+                    message: "You can only assign projects to clients you invited and who accepted.",
+                });
+            }
+
+            nextClientId = Number(clientId);
+        }
+
+        const updatedProject = await prisma.project.update({
+            where: { id: Number(projectId) },
+            data: {
+                name,
+                description,
+                deadline,
+                budget,
+                clientId: nextClientId,
+            },
+        });
+
+        return res.status(200).json({
+            message: "Project updated successfully",
+            project: updatedProject,
+        });
+
+    } catch (error) {
+        console.error("Project update error:", error);
+        return res.status(500).json({
+            message: "Project update failed",
+            error: error.message,
+        });
     }
 }
 
@@ -246,32 +332,71 @@ export const getprojectdetails = async (req, res) => {
     }
 }
 
-export const newMilestone = async (req, res) => {
+export const deleteproject = async (req, res) => {
+
+    const { projectId } = req.params;
+    const parsedProjectId = Number(projectId);
+    const freelancerId = req.user?.id;
+
+    if (!freelancerId) {
+        return res.status(401).json({
+            message: "Unauthorized",
+        });
+    }
+
+    if (!projectId || Number.isNaN(parsedProjectId)) {
+        return res.status(400).json({
+            message: "Invalid projectId",
+        });
+    }
 
     try {
 
-        const {projectId} = req.params;
-        const {title, price, status, dueDate} = req.body;
+        const existingProject = await prisma.project.findUnique({
+            where: { id: parsedProjectId },
+        });
 
-        const newMilestone = await prisma.milestone.create({
-            data: {
-                title,
-                price: price.toString(),
-                status,
-                dueDate: new Date(dueDate),
-                projectId: Number(projectId),
-            }
+        if (!existingProject) {
+            return res.status(404).json({
+                message: "Project not found",
+            });
+        }
+
+        if (existingProject.freelancerId !== Number(freelancerId)) {
+            return res.status(403).json({
+                message: "You are not allowed to delete this project",
+            });
+        }
+
+        const deletedProject = await prisma.$transaction(async (tx) => {
+            await tx.message.deleteMany({
+                where: { projectId: parsedProjectId },
+            });
+
+            await tx.file.deleteMany({
+                where: { projectId: parsedProjectId },
+            });
+
+            await tx.milestone.deleteMany({
+                where: { projectId: parsedProjectId },
+            });
+
+            return tx.project.delete({
+                where: { id: parsedProjectId },
+            });
         });
 
         res.status(200).json({
-            message: "Milestone Added Successfully",
-            newMilestone: newMilestone,
-        })
-        
+            message: "Project Deleted Successfully",
+            project: deletedProject,
+        });
+
     } catch (error) {
+        console.error("Project deletion error:", error);
         res.status(500).json({
-            message: "Adding Milestone Failed",
-        })
+            message: "Project Deletion Failed",
+            error: error.message,
+        });
     }
 
 }
